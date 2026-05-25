@@ -2,10 +2,13 @@
 
 console.log('This script populates some test projects, products, productCategorys and projectinstances to your database. Specified database as argument - e.g.: populatedb mongodb://your_username:your_password@your_dabase_url');
 
+require('dotenv').config();
+
 // Get arguments passed on command line
 var userArgs = process.argv.slice(2);
-if (!userArgs[0].startsWith('mongodb://')) {
-    console.log('ERROR: You need to specify a valid mongodb URL as the first argument');
+var mongoDB = userArgs[0] || process.env.MONGODB_URI;
+if (!mongoDB || !/^mongodb(\+srv)?:\/\//.test(mongoDB)) {
+    console.log('ERROR: You need to specify a valid MongoDB URL as the first argument or set MONGODB_URI in .env');
     return
 }
 
@@ -18,8 +21,10 @@ var Enquiry = require('../models/enquiry')
 
 
 var mongoose = require("mongoose");
-var mongoDB = userArgs[0];
-mongoose.connect(mongoDB);
+mongoose.connect(mongoDB, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+});
 mongoose.Promise = global.Promise;
 var db = mongoose.connection;
 mongoose.connection.on('error', console.error.bind(console, 'MongoDB connection error:'));
@@ -29,13 +34,18 @@ var productCategories = []
 var projects = []
 var enquiries = []
 
-function productCreate(name, description, cost, status, categories, cb) {
-    productdetail = {
+function publicImagePath(relativePath) {
+    return '/' + relativePath.replace(/^www[\/\\]/, '').replace(/\\/g, '/');
+}
+
+function productCreate(name, description, cost, status, categories, imagePath, cb) {
+    var productdetail = {
         name: name,
         description: description,
         cost: cost,
         status: status,
-        categories: categories
+        categories: categories,
+        imagePath: publicImagePath(imagePath)
     }
 
 
@@ -68,15 +78,17 @@ function productCategoryCreate(name, cb) {
     });
 }
 
-function projectCreate(name, owner, description, date, cost, url, categories, cb) {
-    projectdetail = {
+function projectCreate(name, owner, description, date, cost, projectUrl, youtubeUrl, categories, images, cb) {
+    var projectdetail = {
         name: name,
         owner: owner,
         description: description,
         date: date,
         cost: cost,
-        url: url,
-        categories: categories
+        projectUrl: projectUrl,
+        youtubeUrl: youtubeUrl,
+        categories: categories,
+        images: images
     }
 
     var project = new Project(projectdetail);
@@ -134,18 +146,18 @@ function createProductCategory(cb) {
 function createProduct(cb) {
     async.parallel([
         function (callback) {
-                productCreate("woodlamp", "wooden lamp description", 300, true, [productCategories[2], productCategories[1],], callback);
+                productCreate("woodlamp", "wooden lamp description", 300, true, [productCategories[2], productCategories[1],], "www/images/lamps.jpg", callback);
         },
         function (callback) {
-                productCreate("woodchair", "wooden chair description", 300, true, [productCategories[2], productCategories[0],], callback);
+                productCreate("woodchair", "wooden chair description", 300, true, [productCategories[2], productCategories[0],], "www/images/img chair.jpg", callback);
 
         },
         function (callback) {
-                productCreate("lamp", "lamp description", 300, true, [productCategories[1], ], callback);
+                productCreate("lamp", "lamp description", 300, true, [productCategories[1], ], "www/images/interior.jpg", callback);
 
         },
         function (callback) {
-                productCreate("chair", "chair description", 300, true, [productCategories[0], ], callback);
+                productCreate("chair", "chair description", 300, true, [productCategories[0], ], "www/images/architecture.jpg", callback);
 
         },
         ],
@@ -157,19 +169,19 @@ function createProduct(cb) {
 function createprojects(cb) {
     async.parallel([
         function (callback) {
-                projectCreate("project 1", "owner 1", "description for 1", "1998-07-27", 234000, "http://google.com", ["commercial", "office"], callback);
+                projectCreate("project 1", "owner 1", "description for 1", "1998-07-27", 234000, "http://google.com", "", ["commercial", "office"], [publicImagePath("www/images/gallery.jpg"), publicImagePath("www/images/architecture.jpg")], callback);
         },
         function (callback) {
-                projectCreate("project 2", "owner 2", "description for 2", "1968-07-27", 234000, "http://google.com", ["commercial", "shop"], callback);
+                projectCreate("project 2", "owner 2", "description for 2", "1968-07-27", 234000, "http://google.com", "", ["commercial", "shop"], [publicImagePath("www/images/interior.jpg"), publicImagePath("www/images/archi.jpg")], callback);
         },
         function (callback) {
-                projectCreate("project 3", "owner 2", "description for 3", "1998-05-27", 234000, "http://google.com", ["residential", "bunglow"], callback);
+                projectCreate("project 3", "owner 2", "description for 3", "1998-05-27", 234000, "http://google.com", "", ["residential", "bunglow"], [publicImagePath("www/images/partment.jpg"), publicImagePath("www/images/build.jpg")], callback);
         },
         function (callback) {
-                projectCreate("project 4", "owner 3", "description for 4", "1999-07-29", 234000, "http://google.com", ["residential", "farmhouse"], callback);
+                projectCreate("project 4", "owner 3", "description for 4", "1999-07-29", 234000, "http://google.com", "", ["residential", "farmhouse"], [publicImagePath("www/images/landscaping.jpg"), publicImagePath("www/images/green.jpg")], callback);
         },
         function (callback) {
-                projectCreate("project 5", "owner 4", "description for 5", "1990-07-24", 234000, "http://google.com", ["residential", "apartment"], callback);
+                projectCreate("project 5", "owner 4", "description for 5", "1990-07-24", 234000, "http://google.com", "", ["residential", "apartment"], [publicImagePath("www/images/background1.jpg"), publicImagePath("www/images/background2.jpg")], callback);
         }
         ],
         // optional callback

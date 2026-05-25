@@ -25,6 +25,10 @@ var ProductSchema = new Schema({
         //required: true,
         default:true
     },
+    imagePath: {
+        type: String,
+        default: ''
+    },
     image: {
         data: {
             type: Buffer,

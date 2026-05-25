@@ -40,6 +40,15 @@ document.addEventListener('DOMContentLoaded', function() {
 				localStorage.setItem('selectedProject', id)
 				window.location.href = '/project'
 			},
+			projectImageUrl: function(project) {
+				if (!project || !Array.isArray(project.images)) return '/images/gallery.jpg'
+
+				let image = project.images.find(function(imageUrl) {
+					return typeof imageUrl === 'string' && imageUrl.trim() !== ''
+				})
+
+				return image || '/images/gallery.jpg'
+			},
 			onSubmit: function() {
 				fetch(projectsVue.requestURL, {
 					method: 'POST',
@@ -161,18 +170,23 @@ function clearproject() {
 	$('#delete-btn').attr('href', '!#')
 }
 
-const uploadFile = function(file, signedRequest, url) {
+const uploadFile = function(file) {
 	// showWait()
 	// currentVue = this
 
-	fetch(signedRequest, {
-		method: 'PUT',
-		mode: 'cors',
-		body: file
+	let formData = new FormData()
+	formData.append('project_image', file)
+
+	fetch('/api/project/image/upload', {
+		method: 'POST',
+		body: formData
 	})
 		.then(function(response) {
-			// projectsVue.selectedProject.images.push(file)
-			projectsVue.selectedProject.images.push(url)
+			if (!response.ok) throw new Error('Image upload failed')
+			return response.json()
+		})
+		.then(function(data) {
+			projectsVue.selectedProject.images.push(data.url)
 		})
 		.catch(function(error) {
 			M.toast({ html: 'Error occured! Check console for details.' })
@@ -183,27 +197,11 @@ const uploadFile = function(file, signedRequest, url) {
 		})
 }
 
-const getSignedRequest = function(file) {
-	// console.log(file)
-
-	fetch(`/api/project/sign-s3/put?fileName=${file.name}&fileType=${file.type}`)
-		.then(function(response) {
-			return response.json()
-		})
-		.then(function(data) {
-			console.log(data)
-			uploadFile(file, data.signedRequest, data.url)
-		})
-		.catch(function(error) {
-			M.toast({ html: 'Error occured! Check console for details.' })
-			console.error(error)
-		})
-}
 const onFileUpload = function() {
 	let file = document.querySelector('#project-image').files[0]
 	// console.log(file)
 	if (file == null) return alert('No file selected.')
-	getSignedRequest(file)
+	uploadFile(file)
 }
 
 function deleteImage(imageURL) {

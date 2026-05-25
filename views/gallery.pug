@@ -17,7 +17,7 @@ html(lang='en')
         main
             .parallax-container.valign-wrapper#particle-footer(style='height:80vh')
                 .parallax
-                    img.active(src='/images/gallery.jpg', alt='control room', style='filter: brightness(50%)')
+                    img.active(src=projects && projects.length ? imagePaths.projectImage(projects[0]) : imagePaths.DEFAULT_PROJECT_IMAGE, alt='project image', style='filter: brightness(50%)')
                     h1.center.white-text(style='font-size:6em; font-weight:bold;margin-top:30vh;letter-spacing:15px;') Form. Space. Architecture.
 
 
@@ -29,7 +29,7 @@ html(lang='en')
                             .placeholder
                                 .gallery-curve-wrapper
                                     a.gallery-cover.gray
-                                        img.responsive-img(src=project.images[0], alt='project')
+                                        img.responsive-img(src=imagePaths.projectImage(project), alt=project.name || 'project')
                                     .gallery-header
                                         span #{project.name}
                                     .gallery-body
@@ -48,17 +48,19 @@ html(lang='en')
                                         .carousel-wrapper
                                             .carousel
                                                 //- a.carousel-item(href='#one!')	
-                                                each image in project.images
+                                                each image in imagePaths.projectImages(project)
                                                     a.carousel-item(href=image, target="_blank")
                                                         img.bordered-sassy(src=image)
 
                                         .section.center
-                                            iframe.full-width(height="400px" src=project.youtubeUrl+"&origin=http://www.sparcassociates.com/" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen)
+                                            if project.youtubeUrl
+                                                iframe.full-width(height="400px" src=project.youtubeUrl+"&origin=http://www.sparcassociates.com/" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen)
 
 
                                     .gallery-action
-                                        a.btn-floating.btn-large.waves-effect.waves-light(href=project.projectUrl, target="_blank")
-                                            i.material-icons forward
+                                        if project.projectUrl
+                                            a.btn-floating.btn-large.waves-effect.waves-light(href=project.projectUrl, target="_blank")
+                                                i.material-icons forward
 
                     else
                         p.col.s12.center There are no projects.

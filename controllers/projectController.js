@@ -1,17 +1,65 @@
 /* eslint-env node */
 
 const fs = require('fs')
+const path = require('path')
 const mime = require('mime')
 const multer = require('multer')
-
-const aws = require('aws-sdk')
-const S3_BUCKET = process.env.S3_BUCKET
-aws.config.region = process.env.AWS_REGION
-
-const s3 = new aws.S3()
 // -----
 
 var Project = require('../models/project')
+var imagePaths = require('../helpers/imagePaths')
+
+var PROJECT_UPLOAD_URL = '/uploads/projects'
+var PROJECT_UPLOAD_DIR = path.join(__dirname, '..', 'www', 'uploads', 'projects')
+
+function ensureDirectory(dir) {
+	fs.mkdirSync(dir, {
+		recursive: true
+	})
+}
+
+function localUploadPathFromUrl(url) {
+	if (!url || url.indexOf(PROJECT_UPLOAD_URL + '/') !== 0) {
+		return null
+	}
+
+	return path.join(PROJECT_UPLOAD_DIR, path.basename(url))
+}
+
+function deleteLocalProjectImage(url) {
+	var filePath = localUploadPathFromUrl(url)
+
+	if (!filePath) {
+		return
+	}
+
+	fs.unlink(filePath, function(err) {
+		if (err && err.code !== 'ENOENT') {
+			console.error(err)
+		}
+	})
+}
+
+var projectImageUpload = multer({
+	storage: multer.diskStorage({
+		destination: function(req, file, cb) {
+			ensureDirectory(PROJECT_UPLOAD_DIR)
+			cb(null, PROJECT_UPLOAD_DIR)
+		},
+		filename: function(req, file, cb) {
+			var extension = mime.getExtension(file.mimetype) || path.extname(file.originalname).slice(1) || 'jpg'
+			var safeName = path
+				.basename(file.originalname, path.extname(file.originalname))
+				.replace(/[^a-z0-9_-]/gi, '-')
+				.toLowerCase()
+			cb(null, Date.now() + '-' + safeName + '.' + extension)
+		}
+	})
+})
+
+function sendDefaultProjectImage(res) {
+	res.sendFile(path.join(__dirname, '..', 'www', imagePaths.DEFAULT_PROJECT_IMAGE))
+}
 
 // Display list of all Projects.
 exports.project_list = function(req, res) {
@@ -125,27 +173,19 @@ exports.project_create_post = function(req, res) {
 // Handle Project delete on POST.
 exports.project_delete_post = function(req, res) {
 	Project.findById(req.params.id, function(err, data) {
-		var params = {
-			Bucket: S3_BUCKET,
-			Delete: {
-				Objects: []
-			}
+		if (err) {
+			return res.status(500).send(err)
 		}
 
-		// console.log(data)
+		if (!data) {
+			return res.send(true)
+		}
 
-		data.images.forEach(image => {
-			params.Delete.Objects.push({ Key: image.split('/').slice(-1)[0] })
-		})
+		data.images.forEach(deleteLocalProjectImage)
 
-		s3.deleteObjects(params, function(err, data) {
-			// console.log(data)
-
-			if (err) return res.status(500).send(error)
-			Project.findByIdAndRemove(req.params.id, function(err) {
-				if (err) return res.status(500).send(error)
-				return res.send(true)
-			})
+		Project.findByIdAndRemove(req.params.id, function(err) {
+			if (err) return res.status(500).send(err)
+			return res.send(true)
 		})
 	})
 
@@ -219,52 +259,56 @@ exports.project_image_get = function(req, res) {
 			throw err
 		}
 
-		res.contentType(project.image.contentType)
-		res.send(project.image.data)
+		if (!project) {
+			return sendDefaultProjectImage(res)
+		}
+
+		var image = imagePaths.projectImage(project)
+
+		if (image === imagePaths.DEFAULT_PROJECT_IMAGE) {
+			return sendDefaultProjectImage(res)
+		}
+
+		res.redirect(image)
 
 		//res.send(list_products);
 	})
 	// res.send('NOT IMPLEMENTED: Enquiry detail: ' + req.params.id);
 }
 
-exports.project_sign_s3_put_get = (req, res) => {
-	const fileName = req.query.fileName
-	const fileType = req.query.fileType
-
-	const s3Params = {
-		Bucket: S3_BUCKET,
-		Key: fileName,
-		Expires: 60,
-		ContentType: fileType,
-		ACL: 'public-read'
-	}
-
-	s3.getSignedUrl('putObject', s3Params, (err, data) => {
+exports.project_image_upload_post = function(req, res) {
+	projectImageUpload.single('project_image')(req, res, function(err) {
 		if (err) {
-			console.error(err)
 			return res.status(500).send(err)
 		}
-		const returnData = {
-			signedRequest: data,
-			url: `https://${S3_BUCKET}.s3.amazonaws.com/${fileName}`
+
+		if (!req.file) {
+			return res.status(400).send({
+				error: 'No image selected'
+			})
 		}
-		res.send(JSON.stringify(returnData))
+
+		res.send({
+			url: PROJECT_UPLOAD_URL + '/' + req.file.filename
+		})
 	})
 }
 
-exports.project_s3_delete_get = (req, res) => {
+exports.project_image_delete_get = (req, res) => {
 	const filenameToRemove = req.query.fileName
 
-	const s3Params = {
-		Bucket: S3_BUCKET,
-		Key: filenameToRemove
+	if (!filenameToRemove) {
+		return res.send(true)
 	}
 
-	s3.deleteObject(s3Params, function(err, data) {
-		if (err) {
-			console.error(err)
-			return res.status(500).send(err)
-		}
-		res.send(true)
-	})
+	deleteLocalProjectImage(PROJECT_UPLOAD_URL + '/' + filenameToRemove)
+	res.send(true)
+}
+
+exports.deleteLocalProjectImages = function(images) {
+	if (!Array.isArray(images)) {
+		return
+	}
+
+	images.forEach(deleteLocalProjectImage)
 }
